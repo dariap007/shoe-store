@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+
+# Local configuration and secrets
+/config.py
+/config.ini
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE and test caches
+.idea/
+.pytest_cache/
+
+# Build artifacts
+/.dist/
