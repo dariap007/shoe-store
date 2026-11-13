@@ -123,6 +123,13 @@ class MainWindow(tk.Tk):
         self.search_var = tk.StringVar()
         search_entry = ttk.Entry(filter_frame, textvariable=self.search_var, width=30)
         search_entry.pack(side="left", padx=5)
+        self.search_hint_label = tk.Label(
+            filter_frame,
+            text="Введите запрос для поиска",
+            bg=COLOR_ADDITIONAL_BG,
+            fg="gray"
+        )
+        self.search_hint_label.pack(side="left")
 
         self._search_after_id = None
         search_entry.bind("<KeyRelease>", self.on_search_key)
@@ -150,7 +157,15 @@ class MainWindow(tk.Tk):
     def on_search_key(self, event):
         if self._search_after_id:
             self.after_cancel(self._search_after_id)
-            
+
+        query = self.search_var.get().strip()
+        self.search_hint_label.configure(
+            text="Введите запрос для поиска" if not query else ""
+        )
+        if not query:
+            self.apply_filters()
+            return
+
         self._search_after_id = self.after(200, self.perform_search)
 
 
