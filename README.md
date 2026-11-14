@@ -31,7 +31,99 @@
 5. Запустите приложение из корня проекта:
    `python main.py`
 
-При первом запуске приложение создаёт таблицы по скрипту `database/shoe_store.sql` и загружает начальные данные из `resources/import-data/`.
+При первом запуске на пустой базе приложение создаёт таблицы по скрипту `database/shoe_store.sql` и загружает начальные данные из `resources/import-data/`.
+
+## Запуск PostgreSQL через Docker Compose
+
+### Требования
+
+- Docker Desktop запущен и использует Linux containers;
+- установлен Docker Compose v2 (`docker compose version`);
+- Python 3.10 или новее и зависимости проекта установлены в виртуальное окружение для запуска Tkinter-приложения в Windows.
+
+### Настройка и запуск
+
+Все команды выполняются в PowerShell из корня проекта.
+
+1. Если локального `.env` ещё нет, создайте его из примера:
+
+   ```powershell
+   if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+   ```
+
+   Откройте `.env` и задайте собственный локальный `POSTGRES_PASSWORD`. Если `.env` уже существует, не перезаписывайте его. Не записывайте настоящий пароль в `.env.example` и не отправляйте `.env` в Git: этот файл добавлен в `.gitignore`.
+
+2. Проверьте конфигурацию и запустите контейнеры:
+
+   ```powershell
+   docker compose config --quiet
+   docker compose up --build -d
+   docker compose ps
+   ```
+
+   Дождитесь состояния `healthy` у сервиса `db`. Сервис `db-check` выполняет одноразовую проверку и после завершения может иметь состояние `Exited (0)`. При первом запуске пустой базы результат `таблиц=0` ожидаем.
+
+### Импорт схемы и данных
+
+Импортируйте SQL-схему в новую пустую базу один раз:
+
+```powershell
+docker compose cp database/shoe_store.sql db:/tmp/shoe_store.sql
+docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f /tmp/shoe_store.sql'
+```
+
+Затем, в активированном виртуальном окружении Python, загрузите данные из Excel-файлов проекта:
+
+```powershell
+python -c "from app.db_pars import run_import_from_excel; run_import_from_excel()"
+```
+
+Импортёр очищает таблицы перед загрузкой. Запускайте его повторно только если нужно заново загрузить данные.
+
+Проверьте подключение и количество таблиц:
+
+```powershell
+docker compose run --rm db-check
+```
+
+При успешной проверке вывод начинается с `OK: база=shoe_store`; после импорта количество таблиц должно быть больше нуля.
+
+### Подключение Tkinter-приложения
+
+Приложение запускается в Windows, поэтому в локальном `config.ini` укажите параметры из `.env` и опубликованный порт хоста:
+
+```ini
+[database]
+dbname = shoe_store
+user = shoe_user
+password = ваш_локальный_пароль
+host = localhost
+port = 5433
+```
+
+Если вы задали в `.env` другие имя базы, имя пользователя или порт, укажите те же значения в `config.ini`. Параметр приложения называется `dbname`. Файл `config.ini` также исключён из Git. Запустите приложение из корня проекта:
+
+```powershell
+python main.py
+```
+
+Внутри сети Compose сервисы используют адрес `db:5432`; для Tkinter-приложения в Windows используется `localhost:5433`.
+
+### Остановка
+
+Остановите контейнеры, не удаляя их:
+
+```powershell
+docker compose stop
+```
+
+Для повторного запуска используйте:
+
+```powershell
+docker compose start
+```
+
+Постоянное хранение данных томом в этой конфигурации не настроено. Не используйте `docker compose down -v`, если не хотите удалить данные Docker-томов.
 
 ## Структура репозитория
 
@@ -49,7 +141,3 @@
 ## Автор
 
 Пятыго Дарья, ПКС-41
-
-## Для этапа 5
-
-Текст для выполнения этапа 5 слияние
