@@ -8,6 +8,10 @@ from .add_product_window import AddProductWindow
 from .edit_product_window import EditProductWindow
 from .order_windows import OrdersListWindow
 
+
+SEARCH_HINT = "Поиск по названию, категории, производителю или поставщику"
+
+
 class MainWindow(tk.Tk):
     def __init__(self, user_data):
         super().__init__()
@@ -123,9 +127,22 @@ class MainWindow(tk.Tk):
         self.search_var = tk.StringVar()
         search_entry = ttk.Entry(filter_frame, textvariable=self.search_var, width=30)
         search_entry.pack(side="left", padx=5)
+        self.search_hint_label = tk.Label(
+            search_entry,
+            text=SEARCH_HINT,
+            bg=COLOR_MAIN_BG,
+            fg="gray",
+            font=("TkDefaultFont", 8),
+            anchor="w"
+        )
+        self.search_hint_label.place(x=4, rely=0.5, anchor="w")
+        self.search_hint_label.bind(
+            "<Button-1>",
+            lambda event: search_entry.focus_set()
+        )
 
         self._search_after_id = None
-        search_entry.bind("<KeyRelease>", self.on_search_key)
+        self.search_var.trace_add("write", self.on_search_query_changed)
         
         
         # tk.Button(filter_frame, text="Заказы", command=self.open_orders_list_window, width=10, bg=COLOR_ACCENT).pack(side='left', padx=5)
@@ -147,10 +164,15 @@ class MainWindow(tk.Tk):
             filter_frame.pack_forget()
 
 
-    def on_search_key(self, event):
+    def on_search_query_changed(self, *_):
         if self._search_after_id:
             self.after_cancel(self._search_after_id)
-            
+
+        if self.search_var.get().strip():
+            self.search_hint_label.place_forget()
+        else:
+            self.search_hint_label.place(x=4, rely=0.5, anchor="w")
+
         self._search_after_id = self.after(200, self.perform_search)
 
 
