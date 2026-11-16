@@ -89,7 +89,7 @@ def run_import_from_excel():
     with engine.begin() as conn:
         conn.execute(text("""
             TRUNCATE TABLE order_items, orders, products, users, pickup_points
-            CASCADE;
+            RESTART IDENTITY CASCADE;
         """))
 
     # 2. Импорт пользователей из resources/import-data/user_import.xlsx
