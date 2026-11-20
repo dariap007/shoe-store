@@ -123,7 +123,76 @@ docker compose stop
 docker compose start
 ```
 
-Постоянное хранение данных томом в этой конфигурации не настроено. Не используйте `docker compose down -v`, если не хотите удалить данные Docker-томов.
+## Постоянное хранение и сети
+
+### Назначение тома
+
+Сервис `db` хранит данные PostgreSQL в именованном томе `db_data`, который монтируется в `/var/lib/postgresql/data`. Тома сохраняют содержимое базы при остановке и пересоздании контейнера. Точное имя тома Compose имеет префикс проекта, например `shoe-store_db_data`.
+
+Перед изменением или пересозданием хранилища создайте резервную копию работающей базы.
+
+```powershell
+docker compose exec db pg_dump -U shoe_user -d shoe_store -f /tmp/shoe_store_before_volume.sql
+docker compose cp db:/tmp/shoe_store_before_volume.sql ./backups/shoe_store_before_volume.sql
+Get-Item .\backups\shoe_store_before_volume.sql
+Get-Content .\backups\shoe_store_before_volume.sql -TotalCount 12
+```
+
+Если имена базы или пользователя в `.env` изменены, используйте в команде соответствующие значения из `.env`. Каталог `backups/` исключён из Git и может содержать конфиденциальные данные.
+
+### Восстановление в том
+
+Остановите и удалите контейнеры без удаления томов, примените Compose-конфигурацию с монтированием `db_data` и запустите сервисы:
+
+```powershell
+docker compose config --quiet
+docker compose down
+docker compose up --build -d
+docker compose ps
+docker volume ls
+```
+
+Скопируйте резервную копию в контейнер и восстановите базу:
+
+```powershell
+docker compose cp ./backups/shoe_store_before_volume.sql db:/tmp/restore.sql
+docker compose exec db psql -v ON_ERROR_STOP=1 -U shoe_user -d shoe_store -f /tmp/restore.sql
+docker compose run --rm db-check
+```
+
+Проверьте сохранность записи после пересоздания контейнера:
+
+```powershell
+docker compose exec db psql -U shoe_user -d shoe_store -c "CREATE TABLE IF NOT EXISTS public.docker_persistence_check (id integer PRIMARY KEY, note text NOT NULL);"
+docker compose exec db psql -U shoe_user -d shoe_store -c "INSERT INTO public.docker_persistence_check (id, note) VALUES (13, 'data survives recreation') ON CONFLICT (id) DO UPDATE SET note=EXCLUDED.note;"
+docker compose up -d --force-recreate db
+docker compose exec db psql -U shoe_user -d shoe_store -c "SELECT * FROM public.docker_persistence_check;"
+```
+
+### Команды запуска и остановки
+
+```powershell
+docker compose config --quiet
+docker compose up --build -d
+docker compose ps
+docker compose run --rm db-check
+
+docker compose stop       # остановить контейнеры с сохранением тома
+docker compose start      # запустить остановленные контейнеры
+docker compose down       # удалить контейнеры и сеть, сохранив том
+docker compose up -d      # создать контейнеры заново
+```
+
+### Сети и адреса
+
+- Сервисы `db` и `db-check` подключены к пользовательской сети bridge `shoe-backend`.
+- Внутри сети Compose `db-check` обращается к PostgreSQL по DNS-имени `db` на порту `5432`.
+- Для приложения Windows порт PostgreSQL опубликован только на loopback-интерфейсе хоста: `127.0.0.1:5433` → `db:5432`.
+- В `config.ini` приложение использует `host = localhost` и `port = 5433`.
+- Проверить сеть проекта можно командами `docker network ls` и `docker network inspect <имя-сети-shoe-backend>`.
+- Команда `docker compose port db 5432` показывает опубликованный адрес хоста.
+
+> **Важно:** не выполняйте `docker compose down -v`, если не хотите удалить именованные тома проекта. Эта команда может удалить данные базы вместе с контейнерами. Также с осторожностью используйте `docker volume prune` и ручное удаление томов.
 
 ## Структура репозитория
 
